@@ -1,4 +1,4 @@
-# 🏗️ Multi-Tier Microservice Infrastructure & Blue/Green Deployment on AWS
+#  Multi-Tier Microservice Infrastructure & Blue/Green Deployment on AWS
 
 An end-to-end AWS cloud infrastructure project demonstrating zero-downtime Blue/Green deployments, private microservice architecture, and secure administrative access via a Jump Host.
 
@@ -6,7 +6,8 @@ An end-to-end AWS cloud infrastructure project demonstrating zero-downtime Blue/
 
 ##  Architecture Summary
 
-The infrastructure is deployed inside a custom multi-AZ VPC (`dashboard-counting-vpc`) in the **ap-southeast-1** (Singapore) region.
+
+This infrastructure is deployed inside a custom multi-AZ VPC (`dashboard-counting-vpc`) in the **ap-southeast-1** (Singapore) region.
 
 * **VPC Network:** 2 Public Subnets & 2 Private Subnets spanning 2 Availability Zones (`ap-southeast-1a` & `ap-southeast-1b`).
 * **Public Tier (`dashboard-alb`):** Internet-facing Application Load Balancer handling user requests and performing HTTP-to-HTTPS redirection.
@@ -17,6 +18,7 @@ The infrastructure is deployed inside a custom multi-AZ VPC (`dashboard-counting
 ---
 
 ##  Architecture Diagram
+![Architecture Overview](Session_11.png)
 ---
 
 ## Blue/Green Deployment Strategy
@@ -24,18 +26,55 @@ The infrastructure is deployed inside a custom multi-AZ VPC (`dashboard-counting
 To achieve zero-downtime releases for the `dashboard` application:
 
 1. **Target Group & ASG Setup:** Deployed `dashboard_v2` (Green) into an Auto Scaling Group attached to its own Target Group alongside `dashboard_v1` (Blue).
-2. **Phase 1: Canary Weighted Split:** Configured `dashboard-alb`  listener rules to split live user traffic:
+2. **Weighted Traffic Split (60/40 Canary Test):** Configured `dashboard-alb`  listener rules to split live user traffic:
    * **`dashboard_v2` (Green):** ~60%
    * **`dashboard_v1` (Blue):** ~40%
-3. **Phase 2: Full Cutover:** Shifted 100% of traffic to `dashboard_v2` after verification.
+  
+![ALB Weighted Traffic Split (60/40)](Img2.png)
 
+3. **Full Cutover (100% Shift):** Shifted 100% of traffic to `dashboard_v2` after verification.
+
+![ALB Weighted Traffic Split (60/40)](Img7.png)
+
+4. **Listener Optimization:** Implemented a standard HTTP-to-HTTPS 301 redirection rule on port 80.
+
+##  Verification & Load Testing
+
+A custom shell script (`weightTest.sh`) was executed to issue 100 sequential requests to the public HTTPS domain (`https://dashboard.myat.io`) to validate traffic distribution across deployment phases.
+
+### Phase 1: Weighted Traffic Split Test (60% Green v2 / 40% Blue v1)
+
+* **Target URL:** `https://dashboard.myat.io`
+* **Requests Sent:** 100
+* **Test Result:**
+  * **v1 (Blue):** 39% (39 requests)
+  * **v2 (Green):** 61% (61 requests)
+  * **Success Rate:** 100% (0 unknown/empty requests)
+
+![Weighted Listener Test - 60/40 Split](Img3.png)
+
+---
+
+### Phase 2: Full Cutover Test (100% Green v2 / 0% Blue v1)
+
+* **Target URL:** `https://dashboard.myat.io`
+* **Requests Sent:** 100
+* **Test Result:**
+  * **v1 (Blue):** 0% (0 requests)
+  * **v2 (Green):** 100% (100 requests)
+  * **Success Rate:** 100% (0 unknown/empty requests)
+
+![Weighted Listener Test - 100% Cutover](Img4.png)
 
 ---
 
 ## Security & Traffic Flow Rules
 
 1. **HTTP to HTTPS Redirect:** Configured on dashboard-alb to redirect all HTTP (port 80) traffic to HTTPS (port 443).
-2. **Strict Inbound Filtering:** Private instances (dashboard and counting) only accept application traffic from their respective load balancer security groups and administrative SSH from jumphost-sg.
+   
+![Http to Https Redirection](Img1.png)
+
+3. **Strict Inbound Filtering:** Private instances (dashboard and counting) only accept application traffic from their respective load balancer security groups and administrative SSH from jumphost-sg.
 
 | Security Group | Inbound Rules | Outbound Rules | Purpose |
 | :--- | :--- | :--- | :--- |
@@ -52,3 +91,10 @@ To access private EC2 instances for setup, configuration, or debugging:
 ```bash
 # Connect through the Jump Host to private instances
 ssh -J ec2-user@<JUMP_HOST_PUBLIC_IP> ec2-user@<PRIVATE_INSTANCE_IP>
+
+```
+**Dashboard V1:**
+![Dashboard V1](Img6.png)
+
+**Dashboard V2:**
+![Dashboard V2](Img5.png)
